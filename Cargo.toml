@@ -1,0 +1,12 @@
+[package]
+name = "autocljcker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.32.1"
+enigo = "0.6.1"
+global-hotkey = "0.8.0"
+systime = {version = "0.0.3", features = ["tokio"]}
+tokio = {version = "1.53.1", features = ["rt"]}
+winit = {version = "0.30.13"}
