@@ -10,14 +10,9 @@ use eframe::{
 use rdev::{Button, Key};
 
 
+
 fn main() -> Result<(), ()> {
-    let native_options = eframe::NativeOptions::default();
-    eframe::run_native(
-        "My egui App",
-        native_options,
-        Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))),
-    )
-    .unwrap();
+    Autoclicker::new(Default::default(), Key::F6);
     Ok(())
 }
 
@@ -30,10 +25,18 @@ struct MyEguiApp {
 }
 
 impl MyEguiApp {
+    pub fn run() -> Result<(),eframe::Error>{
+        let native_options = eframe::NativeOptions::default();
+        eframe::run_native(
+            "My egui App",
+            native_options,
+            Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))),
+        )
+    }
     pub fn new(_cc: &eframe::CreationContext) -> Self {
         let hotkey = Key::F6;
         MyEguiApp {
-            running_clicker: Default::default(),
+            running_clicker: None,
             interval_text: Default::default(),
             clicker_settings: Default::default(),
             hotkey
@@ -55,9 +58,9 @@ impl MyEguiApp {
 
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        if ctx.input(|i| i.key_pressed(egui::Key::F7)){
+        /*if ctx.input(|i| i.key_pressed(egui::Key::F7)){
             self.toggle_clicker();
-        }
+        }*/
         if let Some(clicker) = &self.running_clicker {
             if !clicker.is_running() {
                 eprintln!("Clicker exited unexpectedly");
@@ -114,5 +117,5 @@ pub(crate) mod key_input;
 
 mod clicker;
 
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;

@@ -1,17 +1,14 @@
 use std::{
-    default, sync::{Mutex, atomic::AtomicBool}, thread::{self, JoinHandle, Thread, spawn}, time::{Duration, Instant},
+    thread::{JoinHandle, spawn},
+    time::{Duration, Instant},
 };
 
-use eframe::{
-    egui::{self, Color32, RichText},
-};
-use rdev::{Button, Key};
+use rdev::{Button, Event, EventType, Key};
 
 pub struct HotkeyManager {
     pub hotkey: Key,
     last_hotkey_time: Instant,
-    active: AtomicBool,
-    thread: Option<JoinHandle<()>>,
+    _thread: Option<JoinHandle<()>>,
 }
 
 impl HotkeyManager {
@@ -20,16 +17,47 @@ impl HotkeyManager {
         Self {
             hotkey,
             last_hotkey_time: Instant::now(),
-            active: false.into(),
-            thread: None,
+            _thread: None,
         }
     }
 
-    pub fn register_callback(&mut self, callback: Box<dyn Fn(rdev::Event)->() + Send>){
-        spawn(move ||{
-            if let Err(error) = rdev::listen(callback) {
+    pub fn register_callback(
+        &mut self,
+        callback: Box<dyn Fn(rdev::Event) -> Option<rdev::Event> + Send>,
+    ) {
+        let hotkey = self.hotkey;
+        let handler = move |event: Event| {
+            if let EventType::KeyPress(key) = event.event_type
+                && key == hotkey
+            {
+                callback(event)
+            } else {
+                Some(event)
+            }
+        };
+
+        spawn(move || {
+            if let Err(error) = rdev::grab(handler) {
                 eprintln!("Keyboard input error!:\n\t{:?}", error);
             }
         });
     }
+}
+
+#[test]
+fn test_listen_key_input() {
+    spawn_test_key_listener().join().unwrap();
+}
+
+#[allow(unused)]
+pub fn spawn_test_key_listener() -> JoinHandle<()> {
+    let callback: fn(Event) -> () = |event| {
+        dbg!(event.event_type);
+        dbg!(event.name);
+    };
+    spawn(move || {
+        if let Err(error) = rdev::listen(callback) {
+            eprintln!("Keyboard input error!:\n\t{:?}", error);
+        }
+    })
 }
