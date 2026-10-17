@@ -12,7 +12,8 @@ use rdev::{Button, Key};
 
 
 fn main() -> Result<(), ()> {
-    Autoclicker::new(Default::default(), Key::F6);
+    let clicker = Autoclicker::new(Default::default(), Key::F6);
+    loop {}
     Ok(())
 }
 

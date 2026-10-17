@@ -23,13 +23,14 @@ impl HotkeyManager {
 
     pub fn register_callback(
         &mut self,
-        callback: Box<dyn Fn(rdev::Event) -> Option<rdev::Event> + Send>,
+        callback: impl Fn(rdev::Event) -> Option<rdev::Event> + Send + 'static,
     ) {
         let hotkey = self.hotkey;
         let handler = move |event: Event| {
             if let EventType::KeyPress(key) = event.event_type
                 && key == hotkey
             {
+                println!("callback called!");
                 callback(event)
             } else {
                 Some(event)
