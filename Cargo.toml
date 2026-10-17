@@ -7,6 +7,7 @@ edition = "2024"
 eframe = "0.32.1"
 enigo = "0.6.1"
 global-hotkey = "0.8.0"
+rdev = "0.5.3"
 systime = {version = "0.0.3", features = ["tokio"]}
 tokio = {version = "1.53.1", features = ["rt"]}
 winit = {version = "0.30.13"}
