@@ -7,5 +7,5 @@ edition = "2024"
 eframe = "0.32.1"
 rdev = { version = "0.5.3", features = ["unstable_grab"] }
 systime = {version = "0.0.3", features = ["tokio"]}
-tokio = {version = "1.53.1", features = ["rt", "sync"]}
+tokio = {version = "1.53.1", features = ["rt", "sync", "macros"]}
 winit = {version = "0.30.13"}

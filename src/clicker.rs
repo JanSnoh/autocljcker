@@ -63,7 +63,7 @@ impl Autoclicker {
         {
             let sender = tx.clone();
             _hotkey_manager.register_callback(move |_| {
-                let _ = sender.send(ClickerCommand::Toggle);
+                let _ = sender.blocking_send(ClickerCommand::Toggle);
                 None
             });
         }
@@ -141,36 +141,47 @@ fn spawn_clicker_thread(settings:AutoclickerSettings, mut rx: mpsc::Receiver<Cli
         .unwrap();
     eprintln!("clicker started");
     rt.block_on(async {
-            let mut timer = time::interval(interval);
-            loop {
-                match timeout(interval*16/18, rx.recv()).await.transpose()
-                    .expect("Channel to clicker closed unexpectedly") {
-                    Ok(ClickerCommand::Terminate) => return (),
-                    Ok(ClickerCommand::OverwriteDuration(new_duration)) => {
-                        interval = dbg!(new_duration);
-                        timer = time::interval(new_duration)
-                    }, // overwrite the current timer
-                    Ok(command @ (ClickerCommand::Pause | ClickerCommand::Start | ClickerCommand::Toggle)) => {
-                        let mut state_lock = state.lock().await;
-                        let prev_state = *state_lock;
-                        if prev_state.should_pause(command){
-                            eprintln!("pausing");
-                            *state_lock = ClickerState::Paused;
-                        } else if prev_state.should_resume(command){
-                            eprintln!("resuming");
-                            *state_lock = ClickerState::Running;
-                        }
-                    },
-                    Err(_) => (),
+        let mut timer = time::interval(interval);
+        loop {
+            tokio::select!{
+                command = rx.recv() => {
+                    match command
+                        .expect("Channel to clicker closed unexpectedly") {
+                        ClickerCommand::Terminate => return (),
+                        ClickerCommand::OverwriteDuration(new_duration) => {
+                            interval = dbg!(new_duration);
+                            timer = time::interval(new_duration)
+                        }, // overwrite the current timer
+                        command @ (ClickerCommand::Pause | ClickerCommand::Start | ClickerCommand::Toggle)=> {
+                            dbg!(command);
+                            let mut state_lock = state.lock().await;
+                            let prev_state = *state_lock;
+                            if prev_state.should_pause(command){
+                                eprintln!("pausing");
+                                *state_lock = ClickerState::Paused;
+                            } else if prev_state.should_resume(command){
+                                eprintln!("resuming");
+                                *state_lock = ClickerState::Running;
+                            }
+                        },
+                    }
                 }
-                match *state.lock().await {
-                    ClickerState::Paused => continue,
-                    ClickerState::Running => (),
+                _ = timer.tick() => {
+                    match *state.lock().await {
+                        ClickerState::Paused => continue,
+                        ClickerState::Running => Autoclicker::click(button),
+                    }
                 }
-                
-                timer.tick().await;
-                Autoclicker::click(button);
-            }
-        });
+            };
+        }
+    });
     })
+}
+
+#[test]
+fn sanity_check(){
+    let (tx, mut rx) = mpsc::channel(15);
+    let tx2 = tx.clone();
+    tx2.blocking_send(()).unwrap();
+    assert_eq!(Some(()), rx.blocking_recv());
 }
