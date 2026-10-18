@@ -2,10 +2,10 @@ use crate::key_input::HotkeyManager;
 use rdev::{Button, EventType, Key};
 use std::{
     sync::{
-        Arc, Mutex, atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, TryRecvError},
+        Arc,
     }, thread::{self, JoinHandle}, time::Duration,
 };
-use tokio::{time::{self, Interval}};
+use tokio::{sync::{Mutex, mpsc}, time::{self, error::Elapsed, timeout}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutoclickerSettings {
@@ -54,7 +54,7 @@ pub struct Autoclicker {
 
 impl Autoclicker {
     pub fn new(settings: AutoclickerSettings, hotkey: Key) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = mpsc::channel(15);
         let state: Arc<Mutex<ClickerState>> = Arc::new(Mutex::new(ClickerState::Paused));
         // Copy of the active flag for moving into the closure
         let _state = state.clone();
@@ -81,33 +81,46 @@ impl Autoclicker {
         rdev::simulate(&rdev::EventType::ButtonRelease(button)).unwrap();
     }
     pub fn get_state(&self) -> Result<ClickerState, std::sync::PoisonError<std::sync::MutexGuard<'_, ClickerState>>>   {
-        Ok(*self.state.lock()?)
+        Ok(*self.state.blocking_lock())
     }
     pub fn is_running(&self) -> bool {
         match &self.thread {
             Some(handle) => {
-                !handle.is_finished() && *self.state.lock().unwrap() == ClickerState::Running
+                !handle.is_finished() && self.get_state().unwrap() == ClickerState::Running
             }
             None => false,
         }
     }
-    pub fn set_active(&self) {
+    pub fn start(&self) {
         if let Some(thread) = &self.thread {
             thread.thread().unpark();
         }
-        let _ = self.command_channel.send(ClickerCommand::Start);
+        self.send_command(ClickerCommand::Start);
     }
-    pub fn set_inactive(&self) {
-        let _ = self.command_channel.send(ClickerCommand::Pause);
+    pub fn pause(&self) {
+        self.send_command(ClickerCommand::Pause);
+    }
+    pub fn toggle(&self) {
+        self.send_command(ClickerCommand::Toggle);
+    }
+    pub fn get_hotkey(&self) -> Key{
+        self._hotkey_manager.hotkey
+    }
+    
+    pub fn change_interval(&mut self, new_duration: Duration){
+        self.send_command(ClickerCommand::OverwriteDuration(new_duration))
+    }
+    fn send_command(&self, command: ClickerCommand){
+        self.command_channel.blocking_send(command).unwrap()
     }
 }
 
 impl Drop for Autoclicker {
     fn drop(&mut self) {
         self.command_channel
-            .send(ClickerCommand::Terminate)
+            .blocking_send(ClickerCommand::Terminate)
             .expect("Autoclicker Thread has paniced!");
-        self.set_active();
+        self.start();
         eprintln!("running clicker destructor");
         // join the thread and panic if joining failed.
         self.thread
@@ -119,7 +132,7 @@ impl Drop for Autoclicker {
     }
 }
 
-fn spawn_clicker_thread(settings:AutoclickerSettings, rx: Receiver<ClickerCommand>, state: Arc<Mutex<ClickerState>>) -> JoinHandle<()>{
+fn spawn_clicker_thread(settings:AutoclickerSettings, mut rx: mpsc::Receiver<ClickerCommand>, state: Arc<Mutex<ClickerState>>) -> JoinHandle<()>{
     thread::spawn(move || {
         let AutoclickerSettings { mut interval, button } = settings;
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -130,24 +143,27 @@ fn spawn_clicker_thread(settings:AutoclickerSettings, rx: Receiver<ClickerComman
     rt.block_on(async {
             let mut timer = time::interval(interval);
             loop {
-                match rx.try_recv() {
-                    Err(TryRecvError::Disconnected) | Ok(ClickerCommand::Terminate) => return (),
+                match timeout(interval*16/18, rx.recv()).await.transpose()
+                    .expect("Channel to clicker closed unexpectedly") {
+                    Ok(ClickerCommand::Terminate) => return (),
                     Ok(ClickerCommand::OverwriteDuration(new_duration)) => {
-                        interval = new_duration;
+                        interval = dbg!(new_duration);
                         timer = time::interval(new_duration)
                     }, // overwrite the current timer
                     Ok(command @ (ClickerCommand::Pause | ClickerCommand::Start | ClickerCommand::Toggle)) => {
-                        let mut state_lock = state.lock().unwrap();
+                        let mut state_lock = state.lock().await;
                         let prev_state = *state_lock;
                         if prev_state.should_pause(command){
+                            eprintln!("pausing");
                             *state_lock = ClickerState::Paused;
                         } else if prev_state.should_resume(command){
+                            eprintln!("resuming");
                             *state_lock = ClickerState::Running;
                         }
                     },
-                    Err(TryRecvError::Empty) => (),
+                    Err(_) => (),
                 }
-                match *state.lock().unwrap(){
+                match *state.lock().await {
                     ClickerState::Paused => continue,
                     ClickerState::Running => (),
                 }
