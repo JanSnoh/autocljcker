@@ -9,3 +9,6 @@ rdev = { version = "0.5.3", features = ["unstable_grab"] }
 systime = {version = "0.0.3", features = ["tokio"]}
 tokio = {version = "1.53.1", features = ["rt", "sync", "macros"]}
 winit = {version = "0.30.13"}
+
+[build-dependencies]
+winres = "0.1.12"

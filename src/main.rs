@@ -1,4 +1,4 @@
-// #![cfg_attr(debug_assertions, windows_subsystem = "windows")]
+#![cfg_attr(debug_assertions, windows_subsystem = "windows")]
 use std::{
     default,
     sync::{Mutex, atomic::AtomicBool},
@@ -7,7 +7,7 @@ use std::{
 };
 
 use clicker::{Autoclicker, AutoclickerSettings};
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, Color32, IconData, RichText};
 use rdev::{Button, Key};
 use tokio::time::Interval;
 
