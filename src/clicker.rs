@@ -76,6 +76,7 @@ impl Autoclicker {
     }
 
     pub fn click(button: Button) {
+        #[cfg(debug_assertions)]
         println!("clicking!");
         rdev::simulate(&rdev::EventType::ButtonPress(button)).unwrap();
         rdev::simulate(&rdev::EventType::ButtonRelease(button)).unwrap();
@@ -121,14 +122,12 @@ impl Drop for Autoclicker {
             .blocking_send(ClickerCommand::Terminate)
             .expect("Autoclicker Thread has paniced!");
         self.start();
-        eprintln!("running clicker destructor");
         // join the thread and panic if joining failed.
         self.thread
             .take()
             .map(JoinHandle::join)
             .transpose()
-            .unwrap();
-        eprintln!("running clicker destructor");
+            .expect("Could not join clicker thread");
     }
 }
 
@@ -139,7 +138,6 @@ fn spawn_clicker_thread(settings:AutoclickerSettings, mut rx: mpsc::Receiver<Cli
         .enable_time()
         .build()
         .unwrap();
-    eprintln!("clicker started");
     rt.block_on(async {
         let mut timer = time::interval(interval);
         loop {
