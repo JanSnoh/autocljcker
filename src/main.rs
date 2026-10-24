@@ -35,7 +35,7 @@ impl MyEguiApp {
         let hotkey = Key::F6;
         MyEguiApp {
             clicker: Autoclicker::new(AutoclickerSettings::default(), hotkey),
-            interval_text: Default::default(),
+            interval_text: String::from("100"),
             clicker_settings: Default::default(),
         }
     }
